@@ -1,0 +1,9 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Sinh ra khi chạy (tự tạo lại bằng python -m app.seed / huấn luyện)
+data/
+models/

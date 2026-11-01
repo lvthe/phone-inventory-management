@@ -1,0 +1,14 @@
+body { background: #f5f7fb; }
+.app-nav .nav-link { color: var(--bs-primary-text-emphasis); padding: .35rem .7rem; font-size: .92rem; }
+.app-nav .nav-link.active { background: var(--bs-primary); color: #fff; }
+.card { border: 0; box-shadow: 0 1px 3px rgba(20, 30, 60, .08); }
+.kpi .value { font-size: 1.45rem; font-weight: 600; }
+.kpi .label { font-size: .8rem; color: var(--bs-secondary-color); }
+.chart-box { position: relative; height: 280px; }
+.chart-box.tall { height: 360px; }
+.tx-scroll { max-height: 520px; overflow-y: auto; }
+.badge-up { background: #e6f4ea; color: #137333; }
+.badge-down { background: #fce8e6; color: #b3261e; }
+.price-big { font-size: 1.6rem; font-weight: 600; }
+.note-list li { margin-bottom: .25rem; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }

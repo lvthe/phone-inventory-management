@@ -1,0 +1,10 @@
+﻿feature,min,max
+brand_point,4.5,10.0
+cpu_point,17.0,100.0
+ram,4.0,16.0
+rom,64.0,1024.0
+widescreen,6.1,8.0
+ppi,260.0,522.0
+battery,3279.0,6600.0
+camera,12.0,200.0
+release_year,2022.0,2025.0

@@ -1,0 +1,30 @@
+﻿id,name_cpu,point
+1,Apple A19 Pro,100.0
+2,Apple A19,95.0
+3,Apple A18 Pro,96.0
+4,Apple A18,91.0
+5,Apple A16 Bionic,80.0
+6,Apple A15 Bionic,73.0
+7,Snapdragon 8 Elite,98.0
+8,Snapdragon 8 Gen 3,90.0
+9,Snapdragon 7 Gen 3,60.0
+10,Snapdragon 6 Gen 3,48.0
+11,Snapdragon 6 Gen 1,45.0
+12,Snapdragon 4 Gen 2,30.0
+13,Snapdragon 685,22.0
+14,Dimensity 9400,97.0
+15,Dimensity 8400 Ultra,78.0
+16,Dimensity 7300 Energy,52.0
+17,Dimensity 7025 Ultra,44.0
+18,Dimensity 6300,30.0
+19,Exynos 2400,86.0
+20,Exynos 1580,55.0
+21,Exynos 1380,43.0
+22,Tensor G4,79.0
+23,Tensor G3,72.0
+24,Helio G99 Ultra,33.0
+25,Helio G99,32.0
+26,Helio G92 Max,26.0
+27,Helio G81 Ultra,21.0
+28,Unisoc T612,18.0
+29,Unisoc T606,17.0
