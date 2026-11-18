@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import math
 import pickle
 from pathlib import Path
 
@@ -44,8 +45,13 @@ DEFAULT_MIN_MARGIN = 0.03
 STRATEGIES = {"LOI_NHUAN": "Tối đa lợi nhuận", "DOANH_THU": "Tối đa doanh thu", "XA_KHO": "Giải phóng tồn kho"}
 
 
-def round_price(v: float) -> float:
-    return float(max(990_000, round(v / 100_000) * 100_000 - 10_000))
+def round_price(v: float, floor: float | None = None) -> float:
+    """Làm tròn kiểu bán lẻ (...90.000đ). Nếu có floor, kết quả không bao giờ thấp hơn floor
+    (làm tròn lên mức ...90.000đ kế tiếp) để giữ biên lợi nhuận tối thiểu."""
+    r = max(990_000, round(v / 100_000) * 100_000 - 10_000)
+    if floor is not None and r < floor:
+        r = math.ceil((floor + 10_000) / 100_000) * 100_000 - 10_000
+    return float(r)
 
 
 def _save(path: Path, obj) -> None:
@@ -253,6 +259,7 @@ def suggest_price(phone_id: int, strategy: str = "LOI_NHUAN", weeks_to_clear: in
     cost, cur, stock = phone["cost_price"], phone["price"], phone["stock"]
     ref_price = predict_config_price(phone)
     dm = load_demand_model(phone_id)
+    floor = cost * (1 + min_margin)                      # giá thấp nhất cho phép (biên lợi nhuận tối thiểu)
 
     out = {
         "phone_id": phone_id, "name": phone["name"], "sku": phone["sku"], "strategy": strategy,
@@ -262,14 +269,14 @@ def suggest_price(phone_id: int, strategy: str = "LOI_NHUAN", weeks_to_clear: in
 
     if not dm.get("valid"):
         # Không đủ tri thức về nhu cầu -> giảm mức độ thông minh: dùng giá tham chiếu theo cấu hình
-        suggested = round_price(max(ref_price, cost * (1 + min_margin)))
+        suggested = round_price(max(ref_price, floor), floor)
         out.update(suggested_price=suggested, expected_qty=None, expected_profit=None, curve=[],
                    method="Giá tham chiếu theo cấu hình (mô hình hồi quy bội)")
         out["notes"].append(dm.get("reason") or "Chưa có mô hình nhu cầu")
     else:
         a, b = dm["a"], dm["b"]
         q = lambda p: np.maximum(0.0, a * p + b)        # noqa: E731
-        lo = max(cost * (1 + min_margin), dm["price_min"] * 0.9)
+        lo = max(floor, dm["price_min"] * 0.9)
         hi = max(dm["price_max"] * 1.1, lo * 1.05)
         grid = np.linspace(lo, hi, 300)
         qty, revenue, profit = q(grid), grid * q(grid), (grid - cost) * q(grid)
@@ -291,7 +298,7 @@ def suggest_price(phone_id: int, strategy: str = "LOI_NHUAN", weeks_to_clear: in
         p_star = float(grid[idx])
         if closed[strategy] < lo or closed[strategy] > hi:
             out["notes"].append("Nghiệm giải tích nằm ngoài vùng giá đã quan sát; giá đề xuất được giới hạn trong vùng an toàn.")
-        suggested = round_price(p_star)
+        suggested = round_price(p_star, floor)
         cur_q = float(q(cur))
         out.update(
             method="Đường cầu hồi quy tuyến tính Q = a·P + b (np.polyfit)",

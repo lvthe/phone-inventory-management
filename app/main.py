@@ -8,6 +8,8 @@ import csv
 import datetime as dt
 import io
 import json
+import sqlite3
+from contextlib import contextmanager
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -31,6 +33,20 @@ def startup():
 
 def now() -> str:
     return dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+@contextmanager
+def integrity_as_400(action: str):
+    """Lỗi ràng buộc CSDL (trùng tên/SKU, sai khóa ngoại) -> HTTP 400 thay vì 500."""
+    try:
+        yield
+    except sqlite3.IntegrityError as e:
+        raise HTTPException(400, f"{action}: {e}")
+
+
+def require_phone(conn, phone_id: int) -> None:
+    if not conn.execute("SELECT 1 FROM phone WHERE id=?", (phone_id,)).fetchone():
+        raise HTTPException(404, "Không tìm thấy mặt hàng")
 
 
 # =============================================================== schema
@@ -102,7 +118,7 @@ def list_brands():
 
 @app.post("/api/brands")
 def add_brand(b: BrandIn):
-    with db() as conn:
+    with db() as conn, integrity_as_400("Không thêm được hãng"):
         cur = conn.execute("INSERT INTO brand(name, point) VALUES (?, ?)", (b.name, b.point))
         return {"id": cur.lastrowid}
 
@@ -115,7 +131,7 @@ def list_cpus():
 
 @app.post("/api/cpus")
 def add_cpu(c: CpuIn):
-    with db() as conn:
+    with db() as conn, integrity_as_400("Không thêm được chip"):
         cur = conn.execute("INSERT INTO cpu(name_cpu, point) VALUES (?, ?)", (c.name_cpu, c.point))
         return {"id": cur.lastrowid}
 
@@ -173,11 +189,12 @@ def update_phone(phone_id: int, p: PhoneIn):
         old = conn.execute("SELECT price FROM phone WHERE id=?", (phone_id,)).fetchone()
         if not old:
             raise HTTPException(404, "Không tìm thấy mặt hàng")
-        conn.execute(
-            """UPDATE phone SET sku=?, name=?, id_brand=?, id_cpu=?, ram=?, rom=?, widescreen=?, ppi=?, battery=?,
-                   camera=?, release_year=?, image=?, cost_price=?, price=?, min_stock=? WHERE id=?""",
-            (p.sku, p.name, p.id_brand, p.id_cpu, p.ram, p.rom, p.widescreen, p.ppi, p.battery, p.camera,
-             p.release_year, p.image, p.cost_price, p.price, p.min_stock, phone_id))
+        with integrity_as_400("Không sửa được mặt hàng"):
+            conn.execute(
+                """UPDATE phone SET sku=?, name=?, id_brand=?, id_cpu=?, ram=?, rom=?, widescreen=?, ppi=?, battery=?,
+                       camera=?, release_year=?, image=?, cost_price=?, price=?, min_stock=? WHERE id=?""",
+                (p.sku, p.name, p.id_brand, p.id_cpu, p.ram, p.rom, p.widescreen, p.ppi, p.battery, p.camera,
+                 p.release_year, p.image, p.cost_price, p.price, p.min_stock, phone_id))
         if old["price"] != p.price:
             conn.execute("INSERT INTO price_history(phone_id, old_price, new_price, source, created_at) VALUES (?,?,?,?,?)",
                          (phone_id, old["price"], p.price, "MANUAL", now()))
@@ -291,7 +308,7 @@ def list_market():
 
 @app.post("/api/market")
 def add_market(m: MarketIn):
-    with db() as conn:
+    with db() as conn, integrity_as_400("Không thêm được mẫu thị trường"):
         cur = conn.execute(
             """INSERT INTO market_phone(name, id_brand, id_cpu, ram, rom, widescreen, ppi, battery, camera,
                                         release_year, price) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
@@ -369,11 +386,15 @@ def predict_config(c: ConfigIn):
 
 @app.get("/api/ml/demand/{phone_id}")
 def demand_model(phone_id: int):
+    with db() as conn:
+        require_phone(conn, phone_id)
     return ml.demand_info(phone_id)
 
 
 @app.post("/api/ml/demand/{phone_id}/train")
 def train_demand(phone_id: int):
+    with db() as conn:
+        require_phone(conn, phone_id)
     r = dict(ml.train_demand_model(phone_id))
     r.pop("model", None)
     return r
@@ -451,6 +472,8 @@ def apply_suggestion(sid: int):
         s = conn.execute("SELECT * FROM price_suggestion WHERE id=?", (sid,)).fetchone()
         if not s:
             raise HTTPException(404, "Không tìm thấy gợi ý")
+        if s["status"] != "CHO_DUYET":
+            raise HTTPException(400, "Gợi ý này đã được xử lý (áp dụng hoặc từ chối) trước đó")
         old = conn.execute("SELECT price FROM phone WHERE id=?", (s["phone_id"],)).fetchone()
         conn.execute("UPDATE phone SET price=? WHERE id=?", (s["suggested_price"], s["phone_id"]))
         conn.execute("INSERT INTO price_history(phone_id, old_price, new_price, source, created_at) VALUES (?,?,?,?,?)",
@@ -462,6 +485,11 @@ def apply_suggestion(sid: int):
 @app.post("/api/pricing/suggestions/{sid}/reject")
 def reject_suggestion(sid: int):
     with db() as conn:
+        s = conn.execute("SELECT status FROM price_suggestion WHERE id=?", (sid,)).fetchone()
+        if not s:
+            raise HTTPException(404, "Không tìm thấy gợi ý")
+        if s["status"] != "CHO_DUYET":
+            raise HTTPException(400, "Gợi ý này đã được xử lý (áp dụng hoặc từ chối) trước đó")
         conn.execute("UPDATE price_suggestion SET status='TU_CHOI' WHERE id=?", (sid,))
     return {"ok": True}
 
